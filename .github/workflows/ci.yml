@@ -20,7 +20,7 @@ jobs:
       STUDYHUB_ENABLE_SCHEDULER: "0"
       STUDYHUB_LLM_PROVIDER: fake
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -41,7 +41,7 @@ jobs:
       STUDYHUB_ENABLE_SCHEDULER: "0"
       STUDYHUB_LLM_PROVIDER: fake
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
