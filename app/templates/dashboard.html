@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ t('today') }} · StudyHub{% endblock %}
+{% block content %}
+<header class="dashboard-header"><div><p class="eyebrow">{{ t('global_workspace') }}</p><h1>{{ t('today') }}</h1><p>{{ t('today_global_intro') }}</p></div><a class="button" href="{{ url_for('main.planner') }}">{{ t('open_planner') }}</a></header>
+
+<section class="course-strip">
+  {% for item in course_cards %}<a class="course-summary" href="{{ url_for('main.course_overview', course_id=item.course.id) }}" style="--course-color:{{ item.course.color }}"><span>{{ item.course.display_code or t('course') }}</span><strong>{{ item.course.title }}</strong><small>{{ item.concept_count }} {{ t('concepts') }} · {{ item.ready_question_count }} {{ t('ready_questions') }}</small><small>{% if item.has_mastery %}{{ t('observed_mastery') }} {{ '%.0f'|format(item.mastery * 100) }}%{% else %}{{ t('no_learning_data') }}{% endif %}</small></a>{% endfor %}
+  <a class="course-summary add-course" href="{{ url_for('main.courses') }}"><span>+</span><strong>{{ t('manage_courses') }}</strong></a>
+</section>
+
+<div class="grid two">
+  <section class="card"><div class="plan-heading"><div><p class="eyebrow">{{ t('today_plan') }}</p><h2>{{ t('study_tasks') }}</h2></div><strong>{{ t('completed_progress', completed=plan.completed, total=plan.total) }}</strong></div>
+    <div class="task-list">{% for task in plan.tasks[:5] %}<article class="study-task {% if task.status == 'completed' %}completed{% endif %}"><div><p><span class="badge {% if task.source == 'manual' %}manual{% endif %}">{{ task.course.display_code or task.course.title }}</span></p><h3>{{ task.title }}</h3><p class="muted">{{ t('mode_' ~ task.mode) }} · {{ task.progress_value }}/{{ task.target_value }} {{ t('target_questions') if task.target_type == 'questions' else t('target_minutes') }}</p></div>{% if task.status != 'completed' %}<a class="button" href="{{ url_for('main.start_study_task', task_id=task.id) }}">{{ t('start') }}</a>{% endif %}</article>{% else %}<p class="muted">{{ t('no_plan_tasks') }}</p>{% endfor %}</div>
+    <a class="button secondary-button" href="{{ url_for('main.planner') }}">{{ t('manage_full_plan') }}</a>
+  </section>
+  <section class="card"><div class="plan-heading"><div><p class="eyebrow">{{ t('personal_todos') }}</p><h2>{{ t('today_and_overdue') }}</h2></div><span class="badge manual">{{ t('global_not_course_scoped') }}</span></div>
+    <div class="task-list">{% for item in todos[:5] %}<article class="study-task priority-{{ item.priority }}"><div><small>{{ t('category_' ~ item.category) }}</small><h3>{{ item.title }}</h3></div><form method="post" action="{{ url_for('main.todo_action', item_id=item.id, action='complete') }}">{{ csrf_field() }}<input type="hidden" name="next" value="/"><button>{{ t('complete') }}</button></form></article>{% else %}<p class="muted">{{ t('no_todos') }}</p>{% endfor %}</div>
+    <a class="button secondary-button" href="{{ url_for('main.planner') }}">{{ t('open_planner') }}</a>
+  </section>
+</div>
+
+{% if plan.recommendations %}<section class="card recommendations"><div class="plan-heading"><div><p class="eyebrow">{{ t('ai_recommendations') }}</p><h2>{{ t('suggestions_not_scheduled') }}</h2></div><a class="button secondary-button" href="{{ url_for('main.planner') }}">{{ t('review_suggestions') }}</a></div><p class="muted">{{ t('suggestions_require_acceptance') }}</p></section>{% endif %}
+{% endblock %}

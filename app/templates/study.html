@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ t('study_title') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('study_eyebrow') }}</p><h1>{{ t('study_title') }}</h1><p>{{ t('study_intro') }}</p></header>
+
+<section class="provider-strip card"><span>{{ t('configured_provider') }}: <strong>{{ configured_provider }}</strong></span><span id="effective-provider-note">{{ t('provider_permission_note') }}</span></section>
+
+{% if courses %}
+<section class="card session-builder">
+  <div class="plan-heading"><div><p class="eyebrow">{{ t('new_session') }}</p><h2>{{ t('choose_practice_mode') }}</h2></div></div>
+  <form method="post" action="{{ url_for('main.start_study_session') }}" class="session-form" id="session-form">{{ csrf_field() }}
+    <label>{{ t('saved_practice_scope') }}<select id="session-preset"><option value="">{{ t('choose_saved_scope') }}</option>{% for preset in practice_presets %}<option value="{{ preset.id }}" data-course="{{ preset.course_id }}" data-concepts='{{ preset.concept_ids|tojson }}' data-level="{{ preset.difficulty_level }}" data-count="{{ preset.target_count }}" data-type="{{ preset.question_type }}" data-material="{{ '1' if preset.material_only else '0' }}">{{ preset.name }}</option>{% endfor %}</select></label>
+    <label>{{ t('course') }}<select name="course_id" id="session-course" required>{% for course in courses %}<option value="{{ course.id }}" data-external="{{ '1' if course.external_ai_allowed else '0' }}" {% if active_course and course.id == active_course.id %}selected{% endif %}>{{ course.display_code ~ ' · ' if course.display_code else '' }}{{ course.title }}</option>{% endfor %}</select></label>
+    <label>{{ t('study_mode') }}<select name="mode" id="session-mode"><option value="practice" selected>{{ t('mode_practice') }}</option><option value="focus">{{ t('mode_focus') }}</option><option value="review">{{ t('mode_review') }}</option></select></label>
+    <label>{{ t('difficulty') }}<select name="difficulty_level" id="session-level"><option value="0">{{ t('difficulty_adaptive') }}</option>{% for level in range(1,6) %}<option value="{{ level }}" {% if level == 3 %}selected{% endif %}>Level {{ level }} · {{ t('difficulty_level_' ~ level) }}</option>{% endfor %}</select><input type="hidden" name="difficulty" value="0.5"></label>
+
+    <fieldset class="concept-scope-field">
+      <legend>{{ t('concepts_for_session') }} · <span id="selected-concept-count">0 {{ t('selected_items') }}</span></legend>
+      <small id="concept-mode-help">{{ t('practice_multi_help') }}</small>
+      <div class="scope-shortcuts"><button type="button" class="secondary-button" id="select-weak">{{ t('select_weak_concepts') }}</button><button type="button" class="secondary-button" id="select-due">{{ t('select_due_concepts') }}</button><button type="button" class="secondary-button" id="clear-scope">{{ t('clear_selection') }}</button></div>
+      <input id="chapter-scope" placeholder="{{ t('chapter_scope_placeholder') }}">
+      <div class="concept-picker" id="session-concepts" tabindex="-1">
+        {% for concept in concepts %}
+        <label class="concept-option" data-course="{{ concept.course_id }}" data-chapter="{{ concept.chapter }}" data-weak="{{ '1' if concept.id in weak_concept_ids else '0' }}" data-due="{{ '1' if concept.id in due_concept_ids else '0' }}">
+          <input type="checkbox" name="concept_ids" value="{{ concept.id }}">
+          <span><strong>{{ concept.name }}</strong><small>{{ ready_counts.get(concept.id, 0) }} {{ t('ready_short') }}{% if ready_counts.get(concept.id, 0) == 0 %} · {{ t('generate_on_start') }}{% endif %}</small></span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <label>{{ t('question_count') }}<input type="number" name="target_count" id="session-count" value="5" min="1" max="50" required></label>
+    <label>{{ t('question_type') }}<select name="question_type" id="session-type"><option value="any">{{ t('type_any') }}</option><option value="single_choice">{{ t('type_single_choice') }}</option><option value="multiple_choice">{{ t('type_multiple_choice') }}</option><option value="short_answer">{{ t('type_short_answer') }}</option><option value="true_false">{{ t('type_true_false') }}</option><option value="calculation">{{ t('type_calculation') }}</option></select></label>
+    <label>{{ t('question_source_policy') }}<select name="source_policy" id="session-source-policy"><option value="reference_guided" selected>{{ t('policy_reference_guided') }}</option><option value="material_strict">{{ t('policy_material_strict') }}</option><option value="exam_style">{{ t('policy_exam_style') }}</option></select><small>{{ t('reference_guided_help') }}</small></label>
+    <label>{{ t('save_scope_optional') }}<input name="preset_name" maxlength="120" placeholder="{{ t('preset_name_example') }}"><small>{{ t('save_scope_help') }}</small></label>
+    <button type="submit" class="start-session-button">{{ t('start_session') }}</button>
+  </form>
+  {% if practice_presets %}<div class="preset-list">{% for preset in practice_presets %}<form method="post" action="{{ url_for('main.delete_practice_preset', preset_id=preset.id) }}">{{ csrf_field() }}<span>{{ preset.name }}</span><button class="danger-button" type="submit">{{ t('delete') }}</button></form>{% endfor %}</div>{% endif %}
+</section>
+{% else %}<section class="card"><p>{{ t('create_course_first') }}</p><a class="button" href="{{ url_for('main.courses') }}">{{ t('create_course') }}</a></section>{% endif %}
+
+<script>
+(() => {
+  const form = document.getElementById('session-form');
+  const course = document.getElementById('session-course');
+  const mode = document.getElementById('session-mode');
+  const help = document.getElementById('concept-mode-help');
+  const chapter = document.getElementById('chapter-scope');
+  const preset = document.getElementById('session-preset');
+  const providerNote = document.getElementById('effective-provider-note');
+  const count = document.getElementById('selected-concept-count');
+  const options = [...document.querySelectorAll('.concept-option')];
+  if (!form || !course || !mode) return;
+  const visibleOptions = () => options.filter(option => option.dataset.course === course.value);
+  const checkedOptions = () => visibleOptions().filter(option => option.querySelector('input').checked);
+  const sync = () => {
+    options.forEach(option => {
+      option.hidden = option.dataset.course !== course.value;
+      if (option.hidden) option.querySelector('input').checked = false;
+    });
+    if (mode.value === 'focus' && checkedOptions().length > 1) {
+      checkedOptions().slice(1).forEach(option => { option.querySelector('input').checked = false; });
+    }
+    help.textContent = mode.value === 'focus' ? {{ t('focus_single_help')|tojson }} : {{ t('practice_multi_help')|tojson }};
+    count.textContent = `${checkedOptions().length} {{ t('selected_items') }}`;
+    const externalAllowed=course.selectedOptions[0]?.dataset.external === '1';
+    providerNote.textContent = {{ configured_provider|tojson }} === 'fake' ? {{ t('fake_provider_warning')|tojson }} : (externalAllowed ? {{ t('external_provider_enabled')|tojson }} : {{ t('external_provider_blocked')|tojson }});
+  };
+  options.forEach(option => option.querySelector('input').addEventListener('change', event => {
+    if (mode.value === 'focus' && event.target.checked) {
+      visibleOptions().forEach(value => { if (value !== option) value.querySelector('input').checked = false; });
+    }
+    sync();
+  }));
+  course.addEventListener('change', sync);
+  mode.addEventListener('change', sync);
+  const selectWhere = predicate => {
+    if (mode.value === 'focus') mode.value = 'practice';
+    visibleOptions().forEach(option => { option.querySelector('input').checked = predicate(option); });
+    sync();
+  };
+  document.getElementById('select-weak').onclick = () => selectWhere(option => option.dataset.weak === '1');
+  document.getElementById('select-due').onclick = () => selectWhere(option => option.dataset.due === '1');
+  document.getElementById('clear-scope').onclick = () => selectWhere(() => false);
+  chapter.addEventListener('input', () => {
+    const query = chapter.value.trim().toLowerCase();
+    if (query) selectWhere(option => option.dataset.chapter.toLowerCase().includes(query));
+  });
+  preset.addEventListener('change', () => {
+    const option=preset.selectedOptions[0]; if (!option?.value) return;
+    course.value=option.dataset.course; mode.value='practice'; sync();
+    const ids=new Set(JSON.parse(option.dataset.concepts || '[]').map(Number));
+    visibleOptions().forEach(value => { value.querySelector('input').checked=ids.has(Number(value.querySelector('input').value)); });
+    document.getElementById('session-level').value=option.dataset.level;
+    document.getElementById('session-count').value=option.dataset.count;
+    document.getElementById('session-type').value=option.dataset.type;
+    document.getElementById('session-source-policy').value=option.dataset.material === '1' ? 'material_strict' : 'reference_guided';
+    sync();
+  });
+  form.addEventListener('submit', event => {
+    if (mode.value === 'focus' && checkedOptions().length !== 1) {
+      event.preventDefault();
+      help.textContent = {{ t('focus_single_help')|tojson }};
+      document.getElementById('session-concepts').focus();
+    }
+  });
+  sync();
+})();
+</script>
+{% endblock %}

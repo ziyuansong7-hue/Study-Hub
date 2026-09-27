@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ t('data_management') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('local_data') }}</p><h1>{{ t('data_management') }}</h1><p>{{ t('data_management_intro') }}</p></header>
+<div class="grid two"><section class="card"><h2>{{ t('download_backup') }}</h2><p>{{ t('backup_intro') }}</p><a class="button" href="{{ url_for('main.download_backup') }}">{{ t('download_backup') }}</a></section><section class="card danger-zone"><h2>{{ t('restore_backup') }}</h2><p>{{ t('restore_warning') }}</p><form method="post" action="{{ url_for('main.restore_data') }}" enctype="multipart/form-data">{{ csrf_field() }}<label>{{ t('backup_file') }}<input type="file" name="backup" accept=".sqlite,.sqlite3,.db" required></label><label>{{ t('type_restore') }}<input name="confirmation" required></label><button class="danger-button">{{ t('restore_backup') }}</button></form></section></div>
+{% endblock %}

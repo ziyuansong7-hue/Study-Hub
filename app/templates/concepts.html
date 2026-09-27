@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ t('concept_workspace') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('human_in_loop') }}</p><h1>{{ t('concept_workspace') }}</h1><p>{{ t('concept_workspace_intro') }}</p></header>
+
+{% if selected_document %}<form method="post" action="{{ url_for('main.extract_concepts', document_id=selected_document.id) }}" class="rescan-form">{{ csrf_field() }}<button>{{ t('rescan_missing_concepts') }}</button><small>{{ t('rescan_missing_help') }}</small></form>{% endif %}
+
+<section class="card concept-context">
+  <form method="get" class="concept-filter-grid">
+    <label>{{ t('course') }}<select name="course_id" onchange="this.form.submit()">{% for course in courses %}<option value="{{ course.id }}" {% if selected_course_id == course.id %}selected{% endif %}>{{ course.display_code ~ ' · ' if course.display_code else '' }}{{ course.title }}</option>{% endfor %}</select></label>
+    <label>{{ t('document') }}<select name="document_id" onchange="this.form.submit()"><option value="">{{ t('all_documents') }}</option>{% for document in documents %}<option value="{{ document.id }}" {% if selected_document and selected_document.id == document.id %}selected{% endif %}>{{ document.filename }}</option>{% endfor %}</select></label>
+    <label>{{ t('status') }}<select name="status"><option value="all">{{ t('all') }}</option>{% for value in ['pending','confirmed','rejected'] %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ t('candidate_' ~ value) }}</option>{% endfor %}</select></label>
+    <label>{{ t('ai_recommendation') }}<select name="recommendation"><option value="all">{{ t('all') }}</option>{% for value in ['create','merge','rename','ignore','review'] %}<option value="{{ value }}" {% if selected_recommendation == value %}selected{% endif %}>{{ t('recommend_' ~ value) }}</option>{% endfor %}</select></label>
+    <label>{{ t('chapter') }}<select name="chapter"><option value="">{{ t('all_chapters') }}</option>{% for value in chapters %}<option value="{{ value }}" {% if selected_chapter == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
+    <label>{{ t('search') }}<input name="q" value="{{ query_text }}"></label>
+    <button>{{ t('apply_filters') }}</button>
+  </form>
+  <div class="provider-strip"><span>{{ t('configured_provider') }}: {{ configured_provider }}</span><span>{{ t('analysis_provider') }}: {{ selected_document.analysis_provider if selected_document else t('varies_by_document') }}</span>{% if selected_document and selected_document.analysis_provider == 'local_heuristic' %}<strong>{{ t('not_ai_verified') }}</strong>{% endif %}</div>
+</section>
+
+<section class="selection-toolbar" data-filtered-ids='{{ filtered_ids|tojson }}'>
+  <button type="button" class="secondary-button" id="select-page">{{ t('select_current_page') }}</button>
+  <button type="button" class="secondary-button" id="select-filtered">{{ t('select_all_filtered', count=total) }}</button>
+  <button type="button" class="secondary-button" id="clear-selection">{{ t('clear_selection') }}</button>
+</section>
+
+<div class="concept-review-list">
+{% for candidate in candidates %}
+  <article class="card concept-review-card {{ candidate.status }}" id="candidate-{{ candidate.id }}">
+    <label class="candidate-checkbox"><input type="checkbox" class="candidate-select" value="{{ candidate.id }}"> <span class="sr-only">{{ t('select') }}</span></label>
+    <div class="concept-review-main">
+      <div class="review-heading"><div><span class="badge status-badge">{{ t('candidate_' ~ candidate.status) }}</span> <span class="badge manual">{{ t('recommend_' ~ candidate.recommended_action) }}</span> <span class="badge manual">{{ t('importance_' ~ candidate.importance) }}</span> <span class="badge manual">{{ t('verification_' ~ candidate.verification_status) }}</span></div><strong>{{ '%.0f'|format(candidate.confidence * 100) }}%</strong></div>
+      <h2>{{ candidate.name }}</h2>
+      <p>{{ candidate.description }}</p>
+      <p class="muted">{% if candidate.chapter %}{{ candidate.chapter }} · {% endif %}{{ candidate.recommendation_reason or t('no_recommendation_reason') }}</p>
+      {% if candidate.prerequisite_names %}<p><strong>{{ t('recommended_prerequisites') }}:</strong> {{ candidate.prerequisite_names|join(', ') }}</p>{% endif %}
+      <details class="evidence-disclosure"><summary>{{ t('evidence_count', count=evidence[candidate.id]|length) }}</summary>{% for chunk in evidence[candidate.id] %}<blockquote>{{ chunk.content[:500] }}<footer>{{ chunk.document.filename }} · {% if chunk.page %}p.{{ chunk.page }}{% else %}§ {{ chunk.section }}{% endif %}</footer></blockquote>{% else %}<p class="muted">{{ t('no_evidence') }}</p>{% endfor %}</details>
+      <div class="task-actions concept-inline-actions">
+        {% if candidate.status == 'pending' %}<form class="ajax-candidate-form" method="post" action="{{ url_for('main.concept_candidate_action', candidate_id=candidate.id, action='confirm') }}">{{ csrf_field() }}<input type="hidden" name="name" value="{{ candidate.name }}"><input type="hidden" name="merge_concept_id" value="{{ candidate.suggested_merge_concept_id or '' }}"><button>{{ t('confirm') }}</button></form><form class="ajax-candidate-form" method="post" action="{{ url_for('main.concept_candidate_action', candidate_id=candidate.id, action='reject') }}">{{ csrf_field() }}<button class="danger-button">{{ t('reject') }}</button></form>{% endif %}
+        <details class="task-editor"><summary>{{ t('edit') }}</summary><form class="ajax-candidate-form candidate-form" method="post" action="{{ url_for('main.concept_candidate_action', candidate_id=candidate.id, action='confirm') }}">{{ csrf_field() }}<label>{{ t('concept_name') }}<input name="name" value="{{ candidate.name }}"></label><label>{{ t('merge_optional') }}<select name="merge_concept_id"><option value="">{{ t('create_new_concept') }}</option>{% for concept in existing_concepts %}<option value="{{ concept.id }}">{{ concept.name }}</option>{% endfor %}</select></label><button>{{ t('confirm') }}</button></form></details>
+      </div>
+    </div>
+  </article>
+{% else %}<section class="card"><p class="muted">{{ t('no_candidates') }}</p></section>{% endfor %}
+</div>
+
+<div class="pagination">{% if page > 1 %}<a class="button secondary-button" href="{{ url_for('main.concepts', course_id=selected_course_id, document_id=selected_document.id if selected_document else None, status=selected_status, recommendation=selected_recommendation, chapter=selected_chapter, q=query_text, page=page-1) }}">← {{ t('previous') }}</a>{% endif %}<span>{{ page }} / {{ pages }}</span>{% if page < pages %}<a class="button secondary-button" href="{{ url_for('main.concepts', course_id=selected_course_id, document_id=selected_document.id if selected_document else None, status=selected_status, recommendation=selected_recommendation, chapter=selected_chapter, q=query_text, page=page+1) }}">{{ t('next') }} →</a>{% endif %}</div>
+
+<div class="bulk-action-bar" id="bulk-bar" hidden>
+  <strong id="selected-count">0</strong> {{ t('selected_items') }}
+  <button type="button" data-bulk-action="confirm">{{ t('bulk_confirm') }}</button>
+  <button type="button" class="danger-button" data-bulk-action="reject">{{ t('bulk_ignore') }}</button>
+  <button type="button" class="secondary-button" data-bulk-action="verify">{{ t('ai_review') }}</button>
+  <button type="button" class="secondary-button" data-bulk-action="importance" data-value="core">{{ t('set_core') }}</button>
+  <button type="button" class="secondary-button" data-bulk-action="importance" data-value="supporting">{{ t('set_supporting') }}</button>
+  <button type="button" class="secondary-button" id="bulk-chapter">{{ t('move_to_chapter') }}</button>
+  <button type="button" class="secondary-button" id="bulk-merge">{{ t('merge_selected') }}</button>
+</div>
+
+<script>
+(() => {
+  const storageKey = 'studyhub-concept-review:' + location.pathname + location.search;
+  const selectionKey = storageKey + ':selected';
+  let restoredSelection = [];
+  try { restoredSelection = JSON.parse(sessionStorage.getItem(selectionKey) || '[]'); } catch (_) {}
+  const selected = new Set(restoredSelection.map(Number));
+  const boxes = [...document.querySelectorAll('.candidate-select')];
+  const bar = document.getElementById('bulk-bar');
+  const count = document.getElementById('selected-count');
+  const filtered = JSON.parse(document.querySelector('.selection-toolbar').dataset.filteredIds || '[]');
+  const sync = () => { boxes.forEach(box => box.checked = selected.has(Number(box.value))); count.textContent = selected.size; bar.hidden = selected.size === 0; sessionStorage.setItem(selectionKey, JSON.stringify([...selected])); };
+  boxes.forEach(box => box.addEventListener('change', () => { const id=Number(box.value); box.checked ? selected.add(id) : selected.delete(id); sync(); }));
+  document.getElementById('select-page').onclick = () => { boxes.forEach(box => selected.add(Number(box.value))); sync(); };
+  document.getElementById('select-filtered').onclick = () => { filtered.forEach(id => selected.add(Number(id))); sync(); };
+  document.getElementById('clear-selection').onclick = () => { selected.clear(); sync(); };
+  const runBulk = async (action, value='') => {
+    if (!selected.size) return;
+    bar.classList.add('working');
+    const response = await fetch('{{ url_for('main.bulk_concepts') }}', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action, value, candidate_ids:[...selected]})});
+    const data = await response.json();
+    if (!response.ok) { alert(data.error?.message || 'Bulk action failed'); bar.classList.remove('working'); return; }
+    location.reload();
+  };
+  document.querySelectorAll('[data-bulk-action]').forEach(button => button.onclick = () => runBulk(button.dataset.bulkAction, button.dataset.value || ''));
+  document.getElementById('bulk-chapter').onclick = () => { const value=prompt('{{ t('chapter_name_prompt') }}'); if (value !== null) runBulk('chapter', value); };
+  document.getElementById('bulk-merge').onclick = () => { const value=prompt('{{ t('merged_name_prompt') }}'); if (value) runBulk('merge', value); };
+  document.querySelectorAll('.ajax-candidate-form').forEach(form => form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const response = await fetch(form.action, {method:'POST', headers:{'X-Requested-With':'fetch'}, body:new FormData(form)});
+    const data = await response.json();
+    if (!response.ok) { alert(data.error?.message || 'Action failed'); return; }
+    const card=document.getElementById('candidate-'+data.candidate_id);
+    card.classList.add(data.status);
+    card.querySelector('.status-badge').textContent = data.status === 'confirmed' ? {{ t('candidate_confirmed')|tojson }} : {{ t('candidate_rejected')|tojson }};
+    card.querySelectorAll('.concept-inline-actions > form').forEach(node => node.remove());
+    selected.delete(Number(data.candidate_id)); sync();
+    const nextCard=card.nextElementSibling; const nextControl=nextCard?.querySelector('.candidate-select, button, summary'); if (nextControl) nextControl.focus();
+  }));
+  const saved=Number(sessionStorage.getItem(storageKey) || 0); if (saved) requestAnimationFrame(() => scrollTo(0,saved));
+  addEventListener('beforeunload', () => sessionStorage.setItem(storageKey, String(scrollY)));
+  sync();
+})();
+</script>
+{% endblock %}

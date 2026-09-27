@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}{{ t('error_title') }} · StudyHub{% endblock %}
+{% block content %}<section class="card error-page"><p class="eyebrow">{{ status }}</p><h1>{{ t('error_title') }}</h1><p>{{ message or t('unexpected_error') }}</p><a class="button" href="{{ url_for('main.dashboard') }}">{{ t('return_dashboard') }}</a></section>{% endblock %}

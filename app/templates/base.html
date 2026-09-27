@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="{{ 'zh-CN' if current_language == 'zh' else 'en' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}StudyHub{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav>
+    <a class="brand" href="{{ url_for('main.dashboard') }}"><span class="brand-word">Study</span><span class="brand-badge">Hub</span></a>
+    <div class="nav-actions">
+      <div class="nav-links">
+        <a href="{{ url_for('main.dashboard') }}">{{ t('today') }}</a>
+        <a href="{{ url_for('main.courses') }}">{{ t('nav_courses') }}</a>
+        <a href="{{ url_for('main.planner') }}">{{ t('planner') }}</a>
+        <a href="{{ url_for('main.study') }}">{{ t('nav_study') }}</a>
+        <a href="{{ url_for('main.mistakes') }}">{{ t('nav_mistakes') }}</a>
+        <a href="{{ url_for('main.agent_runs') }}">{{ t('nav_runs') }}</a>
+        <a href="{{ url_for('main.data_management') }}">{{ t('nav_data') }}</a>
+      </div>
+      <div class="language-switcher" aria-label="{{ t('language') }}">
+        <form method="post" action="{{ url_for('main.set_language', language='zh') }}">{{ csrf_field() }}
+          <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+          <button type="submit" class="language-option {% if current_language == 'zh' %}active{% endif %}">中文</button>
+        </form>
+        <span aria-hidden="true">|</span>
+        <form method="post" action="{{ url_for('main.set_language', language='en') }}">{{ csrf_field() }}
+          <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+          <button type="submit" class="language-option {% if current_language == 'en' %}active{% endif %}">EN</button>
+        </form>
+      </div>
+    </div>
+  </nav>
+  <main>
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <div class="alert {{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

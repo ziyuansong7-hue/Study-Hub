@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ t('mistakes_title') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('mistakes_eyebrow') }}</p><h1>{{ t('mistakes_title') }}</h1></header>
+<section class="card"><form method="get" class="inline-form">
+  <select name="course_id">{% for course in courses %}<option value="{{ course.id }}" {% if selected_course_id == course.id %}selected{% endif %}>{{ course.display_code ~ ' · ' if course.display_code else '' }}{{ course.title }}</option>{% endfor %}</select>
+  <select name="concept"><option value="">{{ t('all_concepts') }}</option>{% for item in concepts %}<option value="{{ item.slug }}" {% if selected_concept == item.slug %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select>
+  <select name="error_type"><option value="">{{ t('all_error_types') }}</option>{% for item in ['conceptual_misconception','missing_prerequisite','procedural_error','calculation_error','misread_question','guessing','none'] %}<option value="{{ item }}" {% if selected_error == item %}selected{% endif %}>{{ t('error_' ~ item) }}</option>{% endfor %}</select>
+  <button>{{ t('filter') }}</button>
+</form></section>
+<section class="card table-wrap"><table><thead><tr><th>{{ t('question') }}</th><th>{{ t('answer') }}</th><th>{{ t('error') }}</th><th>{{ t('feedback') }}</th><th>{{ t('when') }}</th></tr></thead><tbody>
+{% for item in attempts %}<tr><td>{{ item.question.prompt }}</td><td>{{ item.answer }}</td><td><span class="badge">{{ t('error_' ~ item.error_type) }}</span></td><td>{{ item.feedback }}</td><td>{{ item.created_at }}</td></tr>{% else %}<tr><td colspan="5" class="muted">{{ t('no_mistakes') }}</td></tr>{% endfor %}
+</tbody></table></section>
+{% endblock %}

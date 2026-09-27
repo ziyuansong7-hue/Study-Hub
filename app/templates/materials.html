@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ t('materials_title') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('materials_eyebrow') }}</p><h1>{{ t('materials_title') }}</h1><p>{{ t('materials_intro') }}</p><p class="muted">{{ t('upload_limit', size=(config.MAX_CONTENT_LENGTH // 1048576)) }}</p></header>
+
+{% if courses %}
+<section class="card">
+  <form method="get" class="inline-form">
+    <label>{{ t('course') }}<select name="course_id" onchange="this.form.submit()">{% for course in courses %}<option value="{{ course.id }}" {% if selected_course and selected_course.id == course.id %}selected{% endif %}>{{ course.display_code ~ ' · ' if course.display_code else '' }}{{ course.title }}</option>{% endfor %}</select></label>
+  </form>
+  <form method="post" enctype="multipart/form-data" class="material-upload-grid" onsubmit="const b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent='{{ t('processing_material') }}';">{{ csrf_field() }}
+    <input type="hidden" name="course_id" value="{{ selected_course.id }}">
+    <label>{{ t('choose_material') }}<input type="file" name="material" accept=".txt,.md,.pdf" required></label>
+    <label>{{ t('material_type') }}<select name="material_type">{% for value in ['auto','textbook','syllabus','unit_slides','lecture','tutorial','assignment','past_exam','supplementary_reading'] %}<option value="{{ value }}">{{ t('material_type_' ~ value) }}</option>{% endfor %}</select></label>
+    <label>{{ t('analysis_mode') }}<select name="analysis_mode"><option value="auto">{{ t('analysis_mode_auto') }}</option><option value="quick">{{ t('analysis_mode_quick') }}</option><option value="structured">{{ t('analysis_mode_structured') }}</option></select></label>
+    <label>{{ t('source_category') }}<select name="source_category"><option value="course_material">{{ t('source_category_course_material') }}</option><option value="past_exam">{{ t('source_category_past_exam') }}</option><option value="assignment">{{ t('source_category_assignment') }}</option><option value="tutorial">{{ t('source_category_tutorial') }}</option></select></label>
+    <label>{{ t('year_optional') }}<input type="number" name="source_year" min="1900" max="2100"></label>
+    <label class="check"><input type="checkbox" name="coverage_enabled"> {{ t('optional_structure_check') }}</label>
+    <button type="submit">{{ t('upload_process') }}</button>
+  </form>
+</section>
+
+<section class="card">
+  <div class="plan-heading"><div><p class="eyebrow">{{ t('material_library') }}</p><h2>{{ t('documents') }}</h2></div><span class="badge manual">{{ t('provider') }}: {{ provider_name }}</span></div>
+  {% for doc in documents %}
+    {% set summary = doc.analysis_summary or {} %}
+    <article class="material-card {% if selected_document and selected_document.id == doc.id %}selected-document{% endif %}">
+      <div class="material-card-main">
+        <div><strong>{{ doc.filename }}</strong> <span class="badge">{{ doc.status }}</span>{% if doc.is_demo %} <span class="badge demo">{{ t('demo') }}</span>{% endif %}</div>
+        <div class="question-meta">
+          <span>{{ t('material_type_' ~ (doc.material_type or 'auto')) }}</span>
+          <span>{{ t('analysis_mode_' ~ (doc.analysis_mode or 'quick')) }}</span>
+          <span>{{ document_stats[doc.id].chunks }} {{ t('chunks_short') }}</span>
+          <span>{{ document_stats[doc.id].usable_chunks }} {{ t('usable_chunks') }}</span>
+          <span>{{ document_stats[doc.id].candidates }} {{ t('candidates_short') }}</span>
+          {% if summary.get('page_count') %}<span>{{ summary.get('page_count') }} {{ t('pages_short') }}</span>{% endif %}
+        </div>
+        <p class="muted">{{ t('analysis_status') }}: {{ t('analysis_status_' ~ (doc.analysis_status or 'not_started')) }} · {{ t('provider') }}: {{ doc.analysis_provider or 'local' }}</p>
+        {% if doc.coverage_enabled and doc.material_type in ['textbook','syllabus','unit_slides'] %}<p class="muted">{{ t('structure_check_scope') }}</p>{% endif %}
+        <details class="analysis-summary"><summary>{{ t('material_analysis_summary') }}</summary><div class="question-meta"><span>{{ t('pages_short') }}: {{ summary.get('page_count', 0) }}</span><span>{{ t('sections_short') }}: {{ summary.get('section_count', 0) }}</span><span>{{ t('importance_core') }}: {{ summary.get('core_candidate_count', 0) }}</span><span>{{ t('importance_supporting') }}: {{ summary.get('supporting_candidate_count', 0) }}</span><span>{{ t('unreadable_pages') }}: {{ summary.get('unreadable_page_count', 0) }}</span><span>{{ document_stats[doc.id].chunks - document_stats[doc.id].usable_chunks }} {{ t('excluded_chunks') }}</span></div><p class="muted">{{ t('uploaded_material_only_notice') }}</p></details>
+        <details class="analysis-summary"><summary>{{ t('edit_analysis_settings') }}</summary><form method="post" action="{{ url_for('main.material_analysis_settings', document_id=doc.id) }}" class="inline-form">{{ csrf_field() }}<label>{{ t('material_type') }}<select name="material_type">{% for value in ['auto','textbook','syllabus','unit_slides','lecture','tutorial','assignment','past_exam','supplementary_reading'] %}<option value="{{ value }}" {% if doc.material_type == value %}selected{% endif %}>{{ t('material_type_' ~ value) }}</option>{% endfor %}</select></label><label>{{ t('analysis_mode') }}<select name="analysis_mode"><option value="quick" {% if doc.analysis_mode == 'quick' %}selected{% endif %}>{{ t('analysis_mode_quick') }}</option><option value="structured" {% if doc.analysis_mode == 'structured' %}selected{% endif %}>{{ t('analysis_mode_structured') }}</option></select></label><label class="check"><input type="checkbox" name="coverage_enabled" {% if doc.coverage_enabled %}checked{% endif %}> {{ t('optional_structure_check') }}</label><button>{{ t('save') }}</button></form></details>
+      </div>
+      <div class="task-actions">
+        <a class="button secondary-button" href="{{ url_for('main.material_chunks', document_id=doc.id) }}">{{ t('view_source_chunks') }}</a>
+        <a class="button secondary-button" href="{{ url_for('main.concepts', course_id=doc.course_id, document_id=doc.id) }}">{{ t('review_concepts') }}</a>
+        {% if doc.status == 'processed' %}<form method="post" action="{{ url_for('main.extract_concepts', document_id=doc.id) }}" onsubmit="const b=this.querySelector('button'); b.disabled=true; b.textContent='{{ t('extracting_concepts') }}';">{{ csrf_field() }}<button type="submit">{{ t('extract_concepts') }}</button></form>{% endif %}
+        <form method="post" action="{{ url_for('main.reprocess_material', document_id=doc.id) }}">{{ csrf_field() }}<button class="secondary-button">{{ t('reprocess') }}</button></form>
+        <form method="post" action="{{ url_for('main.delete_material', document_id=doc.id) }}" onsubmit="return confirm('{{ t('delete_material_confirm') }}')">{{ csrf_field() }}<button class="danger-button">{{ t('delete') }}</button></form>
+      </div>
+    </article>
+  {% else %}<p class="muted">{{ t('no_materials') }}</p>{% endfor %}
+</section>
+{% else %}
+<section class="card"><p>{{ t('create_course_first') }}</p><a class="button" href="{{ url_for('main.courses') }}">{{ t('create_course') }}</a></section>
+{% endif %}
+{% endblock %}

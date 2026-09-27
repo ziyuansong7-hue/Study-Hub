@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ t('source_chunks') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('source_chunks') }}</p><h1>{{ document.filename }}</h1><p>{{ t('source_chunks_hidden_intro') }}</p></header>
+<section class="card">
+  <form method="get" class="inline-form"><label>{{ t('search') }}<input name="q" value="{{ query_text }}" placeholder="{{ t('search_material_placeholder') }}"></label><label>{{ t('chunk_quality') }}<select name="quality"><option value="usable" {% if quality_filter == 'usable' %}selected{% endif %}>{{ t('quality_usable') }}</option><option value="excluded" {% if quality_filter == 'excluded' %}selected{% endif %}>{{ t('quality_excluded') }}</option><option value="all" {% if quality_filter == 'all' %}selected{% endif %}>{{ t('quality_all') }}</option></select></label><button>{{ t('search') }}</button><a class="button secondary-button" href="{{ url_for('main.materials', course_id=document.course_id, document_id=document.id) }}">{{ t('back_to_materials') }}</a></form>
+</section>
+<details class="card source-chunk-container">
+  <summary>{{ t('expand_source_chunks', count=total) }}</summary>
+  <p class="muted">{{ t('showing_chunk_page', page=page, pages=pages, total=total) }}</p>
+  {% for chunk in chunks %}<details><summary>{{ chunk.section or t('no_section') }}{% if chunk.page %} · p.{{ chunk.page }}{% endif %} · <span class="badge manual">{{ t('chunk_type_' ~ chunk.chunk_type) }}</span></summary><p>{{ chunk.content }}</p>{% if chunk.quality_flags %}<small>{{ t('quality_flags') }}: {{ chunk.quality_flags|join(', ') }}</small>{% endif %}</details>{% else %}<p class="muted">{{ t('no_chunks') }}</p>{% endfor %}
+  <div class="pagination">{% if page > 1 %}<a class="button secondary-button" href="{{ url_for('main.material_chunks', document_id=document.id, page=page-1, q=query_text, quality=quality_filter) }}">← {{ t('previous') }}</a>{% endif %}<span>{{ page }} / {{ pages }}</span>{% if page < pages %}<a class="button secondary-button" href="{{ url_for('main.material_chunks', document_id=document.id, page=page+1, q=query_text, quality=quality_filter) }}">{{ t('next') }} →</a>{% endif %}</div>
+</details>
+{% endblock %}

@@ -1,0 +1,1 @@
+"""StudyHub application services."""

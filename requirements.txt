@@ -1,0 +1,9 @@
+Flask>=3.0,<4
+SQLAlchemy>=2.0,<3
+pydantic>=2.7,<3
+APScheduler>=3.10,<4
+mcp>=1.2,<2
+pypdf>=5,<7
+fonttools>=4.50,<5
+python-dotenv>=1.0,<2
+Alembic>=1.13,<2

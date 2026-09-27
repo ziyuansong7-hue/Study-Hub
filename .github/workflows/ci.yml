@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      STUDYHUB_DATABASE_URL: sqlite:///instance/ci.db
+      STUDYHUB_ENABLE_SCHEDULER: "0"
+      STUDYHUB_LLM_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: python scripts/check_i18n.py
+      - run: alembic upgrade head
+      - run: pytest -m "not e2e" --cov --cov-report=term-missing
+      - if: matrix.python-version == '3.12'
+        run: python -m pip_audit -r requirements.txt
+
+  browser:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      STUDYHUB_ENABLE_SCHEDULER: "0"
+      STUDYHUB_LLM_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: pytest -m e2e

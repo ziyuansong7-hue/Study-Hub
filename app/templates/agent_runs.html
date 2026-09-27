@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ t('runs_title') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('runs_eyebrow') }}</p><h1>{{ t('runs_title') }}</h1><p>{{ t('runs_intro') }}</p></header>
+<section class="card table-wrap"><table><thead><tr><th>{{ t('run') }}</th><th>{{ t('operation') }}</th><th>{{ t('tools') }}</th><th>{{ t('input_summary') }}</th><th>{{ t('decision') }}</th><th>{{ t('time') }}</th><th>{{ t('status') }}</th></tr></thead><tbody>
+{% for run in runs %}<tr><td><code>{{ run.run_id[:8] }}</code></td><td>{{ run.operation }}</td><td>{{ run.tools_used|join(', ') }}</td><td><code>{{ run.input_summary }}</code></td><td><details><summary>{{ t('view') }}</summary><pre>{{ run.decision }}</pre></details></td><td>{{ run.duration_ms }} ms</td><td><span class="badge">{{ run.status }}</span>{% if run.error %}<br><small>{{ run.error }}</small>{% endif %}</td></tr>{% else %}<tr><td colspan="7" class="muted">{{ t('no_runs') }}</td></tr>{% endfor %}
+</tbody></table></section>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ t('practice_page_title') }} · StudyHub{% endblock %}
+{% block content %}
+<header class="practice-header">
+  <div><p class="eyebrow">{{ t('practice_page_eyebrow') }}</p><h1>{{ t('practice_page_title') }}</h1></div>
+  <a class="button secondary-button" href="{{ url_for('main.study', course_id=study_session.course_id) }}">{{ t('back_to_session_setup') }}</a>
+</header>
+
+<section class="session-context card">
+  <div><span class="badge">{{ t('mode_' ~ study_session.mode) }}</span> <span class="source-label">{{ study_session.course.title }}</span>{% if session_concepts %} · {{ session_concepts|map(attribute='name')|join(', ') }}{% endif %} · Level {{ study_session.difficulty_level }}</div>
+  <div class="session-progress"><strong>{{ t('session_progress', current=(session_item.position if session_item else study_session.target_count), total=study_session.target_count) }}</strong><progress value="{{ (study_session.items|selectattr('status','equalto','answered')|list|length) + (study_session.items|selectattr('status','equalto','skipped')|list|length) }}" max="{{ study_session.target_count }}"></progress></div>
+</section>
+
+{% if question %}
+<div class="grid two study-grid">
+  <section class="card question-card">
+    <div class="question-meta"><span class="badge {{ 'demo' if question.source_type == 'demo' else '' }}">{{ t('source_' ~ question.source_type) }}</span><span>{{ question.concept.name }}</span><span>{{ t('type_' ~ question.question_type) }}</span><span>{{ t('effective_grader') }}: {{ t('grader_' ~ effective_grader) }}</span><span>Level {{ question.difficulty_level }} · {{ question.difficulty_score }}/100 · {{ question.expected_minutes }} min</span></div>
+    <h2>{{ question.prompt }}</h2>
+    {% if hint %}<div class="hint-box"><strong>{{ t('hint') }}:</strong> {{ hint }}</div>{% endif %}
+    {% if not decision %}
+    <form method="post" action="{{ url_for('main.practice_session', session_key=study_session.session_key) }}">{{ csrf_field() }}
+      <input type="hidden" name="question_id" value="{{ question.external_id }}">
+      <input type="hidden" name="course_id" value="{{ question.course_id }}">
+      <input type="hidden" name="attempt_id" value="{{ attempt_id }}">
+      <input type="hidden" name="session_id" value="{{ study_session.session_key }}">
+      {% if session_item %}<input type="hidden" name="session_item_id" value="{{ session_item.id }}">{% endif %}
+      {% if question.question_type in ['single_choice','true_false'] %}
+        <fieldset><legend>{{ t('your_answer') }}</legend>{% for option in question.options or ['true','false'] %}<label class="choice"><input type="radio" name="answer" value="{{ option }}" required> {{ option }}</label>{% endfor %}</fieldset>
+      {% elif question.question_type == 'multiple_choice' %}
+        <fieldset><legend>{{ t('your_answer') }}</legend>{% for option in question.options %}<label class="choice"><input type="checkbox" name="answer" value="{{ option }}"> {{ option }}</label>{% endfor %}</fieldset>
+      {% else %}<label>{{ t('your_answer') }}<textarea name="answer" rows="5" required></textarea></label>{% endif %}
+      <label>{{ t('confidence') }} <output id="confidence-value">50%</output><input type="range" name="confidence" min="0" max="1" step="0.05" value="0.5" style="--range-progress:50%" oninput="const percent=Math.round(this.value*100); document.getElementById('confidence-value').value=percent+'%'; this.style.setProperty('--range-progress',percent+'%')"></label>
+      <div class="question-actions"><a class="button secondary-button" href="{{ url_for('main.practice_session', session_key=study_session.session_key, hint=1) }}">{{ t('show_hint') }}</a>{% if session_item %}<button class="secondary-button" type="submit" form="skip-question-form">{{ t('skip_question') }}</button>{% endif %}<button type="submit">{{ t('submit_answer') }}</button></div>
+    </form>
+    {% if session_item %}<form id="skip-question-form" method="post" action="{{ url_for('main.skip_study_question', session_key=study_session.session_key) }}">{{ csrf_field() }}</form>{% endif %}
+    {% endif %}
+  </section>
+  <section class="card result">
+    <h2>{{ t('coach_decision') }}</h2>
+    {% if decision %}
+      <p><span class="badge">{{ t('action_' ~ decision.evaluation.next_action.value) }}</span> <span class="badge manual">{{ t('error_' ~ decision.evaluation.error_type.value) }}</span></p>
+      <p><strong>{{ t('primary_gap') }}:</strong> {{ decision.primary_gap }}</p>
+      <h3>{{ t('answer_explanation') }}</h3><p>{{ decision.evaluation.feedback }}</p>
+      <p><strong>{{ t('effective_grader') }}:</strong> {{ t('grader_' ~ effective_grader) }}</p>
+      <div class="score-grid"><div><small>{{ t('score') }}</small><strong>{% if grade_status == 'pending_review' %}{{ t('pending_review') }}{% else %}{{ '%.0f'|format(decision.evaluation.score * 100) }}%{% endif %}</strong></div><div><small>{{ t('confidence') }}</small><strong>{{ '%.0f'|format(decision.evaluation.confidence * 100) }}%</strong></div><div><small>{{ t('mastery_change') }}</small><strong>{{ '%+.3f'|format(decision.evaluation.mastery_delta) }}</strong></div></div>
+      <div class="grading-breakdown"><span>{{ t('conclusion_correct') }}: {{ t('yes') if decision.evaluation.conclusion_correct else t('no') }}</span><span>{{ t('key_steps') }}: {{ '%.0f'|format(decision.evaluation.key_steps_score * 100) }}%</span><span>{{ t('explanation_sufficient') }}: {{ '%.0f'|format(decision.evaluation.explanation_score * 100) }}%</span><span>{{ t('fatal_error') }}: {{ t('yes') if decision.evaluation.fatal_error else t('no') }}</span></div>
+      <details class="evidence-disclosure"><summary>{{ t('evidence_count', count=decision.evaluation.evidence|length) }}</summary><div class="evidence-content">{% for evidence in decision.evaluation.evidence %}<blockquote>{{ evidence.quote }}<footer>{{ evidence.document }} · {% if evidence.page %}p.{{ evidence.page }}{% else %}§ {{ evidence.section }}{% endif %}</footer></blockquote>{% else %}<p class="muted">{{ t('no_evidence') }}</p>{% endfor %}</div></details>
+      <div class="question-actions result-actions">
+        <a class="button secondary-button" href="{{ url_for('main.practice_session', session_key=study_session.session_key, retry_question_id=question.external_id) }}">{{ t('retry') }}</a>
+        {% if decision.review_concept %}<form method="post" action="{{ url_for('main.start_prerequisite_session') }}">{{ csrf_field() }}<input type="hidden" name="parent_session_id" value="{{ study_session.session_key }}"><input type="hidden" name="concept_slug" value="{{ decision.review_concept }}"><button class="secondary-button">{{ t('review_prerequisite') }}</button></form>{% endif %}
+        <form method="post" action="{{ url_for('main.schedule_study_review') }}">{{ csrf_field() }}<input type="hidden" name="concept_id" value="{{ question.concept_id }}"><button class="secondary-button" type="submit">{{ t('add_tomorrow_plan') }}</button></form>
+        {% if next_item %}<a class="button" href="{{ url_for('main.practice_session', session_key=study_session.session_key) }}">{{ t('next_question') }}</a>{% elif study_session.parent_session %}<form method="post" action="{{ url_for('main.resume_study_session', session_key=study_session.parent_session.session_key) }}">{{ csrf_field() }}<button>{{ t('return_parent_session') }}</button></form>{% else %}<a class="button" href="{{ url_for('main.dashboard') }}">{{ t('finish_session') }}</a>{% endif %}
+      </div>
+    {% else %}<p class="muted">{{ t('submit_for_diagnosis') }}</p>{% endif %}
+  </section>
+</div>
+{% elif study_session.status == 'completed' %}
+<section class="card session-complete"><p class="eyebrow">{{ t('session_complete') }}</p><h2>{{ t('session_complete_message') }}</h2>{% if study_session.parent_session %}<form method="post" action="{{ url_for('main.resume_study_session', session_key=study_session.parent_session.session_key) }}">{{ csrf_field() }}<button>{{ t('return_parent_session') }}</button></form>{% else %}<a class="button" href="{{ url_for('main.dashboard') }}">{{ t('return_dashboard') }}</a>{% endif %}</section>
+{% endif %}
+{% endblock %}

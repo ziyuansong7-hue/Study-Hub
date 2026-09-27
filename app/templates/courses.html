@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ t('courses_title') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('courses_eyebrow') }}</p><h1>{{ t('courses_title') }}</h1><p>{{ t('courses_intro') }}</p></header>
+
+<section class="card">
+  <details class="task-creator" open>
+    <summary>+ {{ t('create_course') }}</summary>
+    <form method="post" action="{{ url_for('main.create_course') }}" class="task-form">{{ csrf_field() }}
+      <label>{{ t('course_name') }}<input name="title" required></label>
+      <label>{{ t('course_code_optional') }}<input name="code" placeholder="COURSE101"></label>
+      <label>{{ t('material_language') }}<select name="material_language"><option value="en">English</option><option value="zh">中文</option><option value="mixed">Mixed</option></select></label>
+      <label>{{ t('explanation_language') }}<select name="explanation_language"><option value="en">English</option><option value="zh">中文</option><option value="mixed">{{ t('follow_interface') }}</option></select></label>
+      <label>{{ t('terminology_policy') }}<select name="terminology_policy"><option value="preserve_source">{{ t('preserve_source') }}</option><option value="english_terms">{{ t('english_terms') }}</option><option value="translated_terms">{{ t('translated_terms') }}</option></select></label>
+      <label>{{ t('course_color') }}<input type="color" name="color" value="#ff9000"></label>
+      <label class="check privacy-check"><input type="checkbox" name="external_ai_allowed"> {{ t('external_ai_consent', provider=provider_name) }}</label>
+      <label class="task-notes">{{ t('description_optional') }}<textarea name="description" rows="2"></textarea></label>
+      <input type="hidden" name="icon" value="book">
+      <button type="submit">{{ t('create_course') }}</button>
+    </form>
+  </details>
+</section>
+
+<div class="course-grid">
+{% for course in courses %}
+  <article class="card course-card {% if course.archived_at %}archived{% endif %}" style="--course-color:{{ course.color }}">
+    <div class="course-card-heading">
+      <div><p class="eyebrow">{{ course.display_code or t('no_course_code') }}</p><h2>{{ course.title }}</h2></div>
+      {% if not course.archived_at %}<a class="button" href="{{ url_for('main.course_overview', course_id=course.id) }}">{{ t('open_course') }}</a>{% endif %}
+    </div>
+    <p class="muted">{{ course.description or t('no_description') }}</p>
+    <p><small>{{ t('material_language') }}: {{ course.material_language }} · {{ t('explanation_language') }}: {{ course.explanation_language }} · {{ t('terminology_policy') }}: {{ t(course.terminology_policy) }}</small></p>
+    <p><small>{{ t('provider') }}: {{ provider_name }} · {{ t('external_ai_allowed') if course.external_ai_allowed else t('external_ai_blocked') }}</small></p>
+    <div class="task-actions">
+      {% if not course.archived_at %}<a class="button secondary-button" href="{{ url_for('main.study', course_id=course.id) }}">{{ t('start_practice') }}</a>{% endif %}
+      <form method="post" action="{{ url_for('main.archive_course', course_id=course.id) }}">{{ csrf_field() }}<button class="secondary-button" type="submit">{{ t('restore') if course.archived_at else t('archive') }}</button></form>
+    </div>
+    <details class="task-editor"><summary>{{ t('edit') }}</summary>
+      <form method="post" action="{{ url_for('main.edit_course', course_id=course.id) }}" class="task-form">{{ csrf_field() }}
+        <label>{{ t('course_name') }}<input name="title" value="{{ course.title }}" required></label>
+        <label>{{ t('material_language') }}<select name="material_language">{% for value,label in [('en','English'),('zh','中文'),('mixed','Mixed')] %}<option value="{{ value }}" {% if course.material_language == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label>{{ t('explanation_language') }}<select name="explanation_language">{% for value,label in [('en','English'),('zh','中文'),('mixed',t('follow_interface'))] %}<option value="{{ value }}" {% if course.explanation_language == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label>{{ t('terminology_policy') }}<select name="terminology_policy">{% for value in ['preserve_source','english_terms','translated_terms'] %}<option value="{{ value }}" {% if course.terminology_policy == value %}selected{% endif %}>{{ t(value) }}</option>{% endfor %}</select></label>
+        <label>{{ t('course_color') }}<input type="color" name="color" value="{{ course.color }}"></label>
+        <label class="check privacy-check"><input type="checkbox" name="external_ai_allowed" {% if course.external_ai_allowed %}checked{% endif %}> {{ t('external_ai_consent', provider=provider_name) }}</label>
+        <label class="task-notes">{{ t('description_optional') }}<textarea name="description" rows="2">{{ course.description }}</textarea></label>
+        <input type="hidden" name="icon" value="{{ course.icon }}">
+        <button type="submit">{{ t('save') }}</button>
+      </form>
+    </details>
+    {% if course.archived_at %}<details class="danger-zone"><summary>{{ t('delete_course') }}</summary><form method="post" action="{{ url_for('main.delete_course', course_id=course.id) }}">{{ csrf_field() }}<label>{{ t('type_course_name_to_delete') }}<input name="confirmation" required></label><button class="danger-button">{{ t('delete_course') }}</button></form></details>{% endif %}
+  </article>
+{% else %}<section class="card"><p class="muted">{{ t('no_courses') }}</p></section>{% endfor %}
+</div>
+{% endblock %}

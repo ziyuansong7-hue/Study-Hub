@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ t('question_bank') }} · StudyHub{% endblock %}
+{% block content %}
+<header><p class="eyebrow">{{ t('question_workflow') }}</p><h1>{{ t('question_bank') }}</h1><p>{{ t('question_bank_intro') }}</p></header>
+<section class="provider-strip card"><span>{{ t('configured_provider') }}: <strong>{{ configured_provider }}</strong></span><span>{% if configured_provider == 'fake' %}{{ t('fake_provider_warning') }}{% elif selected_course and selected_course.external_ai_allowed %}{{ t('external_provider_enabled') }}{% else %}{{ t('external_provider_blocked') }}{% endif %}</span></section>
+
+<section class="card">
+  <h2>{{ t('generate_drafts') }}</h2>
+  <p class="muted">{{ t('difficulty_disclaimer') }}</p>
+  <form method="post" action="{{ url_for('main.generate_questions') }}" class="session-form">{{ csrf_field() }}
+    <label>{{ t('course') }}<select name="course_id" id="question-course" required>{% for course in courses %}<option value="{{ course.id }}" {% if selected_course_id == course.id %}selected{% endif %}>{{ course.display_code ~ ' · ' if course.display_code else '' }}{{ course.title }}</option>{% endfor %}</select></label>
+    <label>{{ t('concept') }}<select name="concept_id" id="question-concept" required>{% for concept in concepts %}<option value="{{ concept.id }}" data-course="{{ concept.course_id }}">{{ concept.name }}</option>{% endfor %}</select></label>
+    <label>{{ t('difficulty') }}<select name="difficulty_level">{% for level in range(1,6) %}<option value="{{ level }}" {% if level == 3 %}selected{% endif %}>Level {{ level }} · {{ t('difficulty_level_' ~ level) }}</option>{% endfor %}</select></label>
+    <label>{{ t('question_type') }}<select name="question_type"><option value="single_choice">{{ t('type_single_choice') }}</option><option value="multiple_choice">{{ t('type_multiple_choice') }}</option><option value="short_answer" selected>{{ t('type_short_answer') }}</option><option value="true_false">{{ t('type_true_false') }}</option><option value="calculation">{{ t('type_calculation') }}</option></select></label>
+    <label>{{ t('question_count') }}<input type="number" name="count" min="1" max="10" value="3"></label>
+    <label>{{ t('question_source_policy') }}<select name="source_policy"><option value="reference_guided" selected>{{ t('policy_reference_guided') }}</option><option value="material_strict">{{ t('policy_material_strict') }}</option><option value="exam_style">{{ t('policy_exam_style') }}</option></select></label>
+    <button>{{ t('generate_drafts') }}</button>
+  </form>
+</section>
+
+<nav class="tab-nav">
+  {% for status in ['pending','approved','rejected','all'] %}<a class="{% if selected_status == status %}active{% endif %}" href="{{ url_for('main.questions', course_id=selected_course_id, status=status) }}">{{ t('question_status_' ~ status) }}</a>{% endfor %}
+</nav>
+
+<div class="question-review-list">
+{% for question in questions %}
+  <article class="card review-question">
+    <div class="review-heading"><div><span class="badge">{{ t('question_status_' ~ question.moderation_status) }}</span> <span class="badge manual">{{ t('source_' ~ question.source_type) }}</span> <span class="badge manual">{{ t('quality_' ~ question.quality_status) }}</span> <span class="badge manual">{{ t('policy_' ~ question.source_policy) }}</span></div><strong>Level {{ question.difficulty_level }} · {{ question.difficulty_score }}/100</strong></div>
+    <h2>{{ question.prompt }}</h2>
+    <p><strong>{{ t('expected_answer') }}:</strong> {{ question.expected_answer }}</p>
+    {% if question.solution_steps %}<details><summary>{{ t('solution_steps') }}</summary><ol>{% for step in question.solution_steps %}<li>{{ step }}</li>{% endfor %}</ol></details>{% endif %}
+    <div class="difficulty-grid">
+      {% for key in ['conceptual_depth','reasoning_steps','topic_integration','novelty','calculation_load','prerequisite_breadth'] %}<div><small>{{ t(key) }}</small><strong>{{ question.difficulty_profile.get(key, 0) }}/4</strong></div>{% endfor %}
+      <div><small>{{ t('expected_time') }}</small><strong>{{ question.expected_minutes }} min</strong></div>
+    </div>
+    <p class="muted">{{ question.difficulty_rationale }}</p>
+    {% if question.quality_flags %}<div class="alert danger">{{ t('quality_flags') }}: {{ question.quality_flags|join(', ') }}</div>{% endif %}{% if question.review_notes %}<div class="alert danger">{{ question.review_notes }}</div>{% endif %}
+    <div class="task-actions">
+      {% if question.moderation_status != 'approved' %}<form method="post" action="{{ url_for('main.question_action', question_id=question.id, action='approve') }}">{{ csrf_field() }}<button>{{ t('approve') }}</button></form>{% endif %}
+      {% if question.moderation_status != 'rejected' %}<form method="post" action="{{ url_for('main.question_action', question_id=question.id, action='reject') }}">{{ csrf_field() }}<button class="danger-button">{{ t('reject') }}</button></form>{% endif %}
+      <form method="post" action="{{ url_for('main.rewrite_question', question_id=question.id) }}">{{ csrf_field() }}<input type="hidden" name="feedback" value="{{ question.review_notes or 'Create a distinct question at the same target level.' }}"><button class="secondary-button">{{ t('rewrite') }}</button></form>
+      <form method="post" action="{{ url_for('main.rewrite_question', question_id=question.id) }}">{{ csrf_field() }}<input type="hidden" name="level_delta" value="1"><input type="hidden" name="feedback" value="Increase reasoning depth without using obscure wording."><button class="secondary-button">{{ t('raise_difficulty') }}</button></form>
+      <form method="post" action="{{ url_for('main.rewrite_question', question_id=question.id) }}">{{ csrf_field() }}<input type="hidden" name="level_delta" value="-1"><input type="hidden" name="feedback" value="Reduce reasoning complexity while preserving the learning objective."><button class="secondary-button">{{ t('lower_difficulty') }}</button></form>
+      {% if question.is_active %}<form method="post" action="{{ url_for('main.question_action', question_id=question.id, action='disable') }}">{{ csrf_field() }}<button class="secondary-button">{{ t('disable') }}</button></form>{% elif question.moderation_status == 'approved' and question.quality_status == 'passed' %}<form method="post" action="{{ url_for('main.question_action', question_id=question.id, action='enable') }}">{{ csrf_field() }}<button class="secondary-button">{{ t('enable') }}</button></form>{% endif %}
+    </div>
+    <details class="task-editor"><summary>{{ t('edit') }}</summary><form method="post" action="{{ url_for('main.edit_question', question_id=question.id) }}" class="task-form">{{ csrf_field() }}<label class="task-notes">{{ t('question') }}<textarea name="prompt" rows="4">{{ question.prompt }}</textarea></label><label class="task-notes">{{ t('expected_answer') }}<textarea name="expected_answer" rows="4">{{ question.expected_answer }}</textarea></label><label>{{ t('question_type') }}<select name="question_type">{% for value in ['single_choice','multiple_choice','short_answer','true_false','calculation'] %}<option value="{{ value }}" {% if value == question.question_type %}selected{% endif %}>{{ t('type_' ~ value) }}</option>{% endfor %}</select></label><label class="task-notes">{{ t('options_one_per_line') }}<textarea name="options" rows="4">{{ (question.options or [])|join('\n') }}</textarea></label><label>{{ t('expected_time') }}<input type="number" name="expected_minutes" min="1" max="90" value="{{ question.expected_minutes }}"></label><label class="task-notes">{{ t('review_notes') }}<textarea name="review_notes">{{ question.review_notes }}</textarea></label><button>{{ t('save_for_review') }}</button></form></details>
+  </article>
+{% else %}<section class="card"><p class="muted">{{ t('no_questions_in_view') }}</p></section>{% endfor %}
+</div>
+{% endblock %}
