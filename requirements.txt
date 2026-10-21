@@ -1,6 +1,6 @@
 Flask>=3.0,<4
 SQLAlchemy>=2.0,<3
-pydantic>=2.7,<3
+pydantic>=2.13.5,<3
 APScheduler>=3.10,<4
 mcp>=1.2,<2
 pypdf>=5,<7
